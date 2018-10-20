@@ -21,35 +21,27 @@
 
 # This is obviously heavily borrowed (almost everything is the same) from Philipp Klaus' python-inwx-xmlrpc.
 
+import os
+import time
 from inwx import domrobot
 from configuration import get_account_data, get_domain_update
-from urllib2 import urlopen
 
-IPV4_DETECTION_API = 'http://ip.42.pl/raw'
+MINUTES = 15
 
-def main():
+while True:
     api_url, username, password = get_account_data(True)
     domain, subdomain, default_ip = get_domain_update(True)
-    try:
-        new_ip = urlopen(IPV4_DETECTION_API).read()
-    except:
-        # If something failed with the IPv6 detection, we may abort at this point
-        return
-        # or simply set the default value:
-        new_ip = default_ip
-    # Instantiate the inwx class (does not connect yet but dispatches calls to domrobot objects with the correct API URL
-    inwx_conn = domrobot(api_url, username, password, 'en', False)
-    # get all the nameserver entries for a certain domain 
-    nsentries = inwx_conn.nameserver.info({'domain': domain})
-    for record in nsentries['record']:
-        if subdomain == record['name']:
-            id = record['id']
-            break
-    if id:
-        print "Setting subdomain %s to the new IPv4 IP %s." % (subdomain, new_ip)
-        inwx_conn.nameserver.updateRecord({'id':id,'content':new_ip,'ttl':3600})
-    else:
-        print "Subdomain not in list of nameserver entries."
+    with open(os.environ.get("IPv4_PATH")) as f:
+        new_ip = f.read()
 
-if __name__ == '__main__':
-    main()
+    inwx_conn = domrobot(api_url, username, password, "en", False)
+    nsentries = inwx_conn.nameserver.info({"domain": domain})
+    ids = []
+    for record in nsentries["record"]:
+        if record["name"] in ["", "*"]:
+            ids.append(record["id"])
+    for id_ in ids:
+        print("Setting subdomain %s to the new IPv4 IP %s." % (subdomain, new_ip))
+        inwx_conn.nameserver.updateRecord({"id": id_, "content": new_ip, "ttl": 3600})
+    print(f"Going to sleep for {MINUTES} minutes")
+    time.sleep(MINUTES * 60)
